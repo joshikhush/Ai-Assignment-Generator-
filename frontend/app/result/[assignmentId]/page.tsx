@@ -28,7 +28,7 @@ export default function ResultPage() {
     if (!assignmentId) return;
 
     // Connect to the backend Socket.io server
-    const socket = io("http://localhost:5000");
+    const socket = io(process.env.NEXT_PUBLIC_API_URL as string);
 
     // Join the room for this specific assignment
     socket.emit("join-assignment", assignmentId);
@@ -67,7 +67,7 @@ export default function ResultPage() {
           </div>
           <h2 className="text-2xl font-bold text-gray-800">AI is generating your paper...</h2>
           <p className="text-gray-500 max-w-md">
-            Our AI is crafting your assignment right now. This usually takes 10–30 seconds. 
+            Our AI is crafting your assignment right now. This usually takes 10–30 seconds.
             This page will automatically update when it's ready!
           </p>
           <div className="flex gap-2 mt-2">
