@@ -27,14 +27,19 @@ export default function ResultPage() {
   useEffect(() => {
     if (!assignmentId) return;
 
-    // Connect to the backend Socket.io server
-    const socket = io(process.env.NEXT_PUBLIC_API_URL as string);
+    let isDone = false; // Prevents both socket + poll from firing at the same time
 
-    // Join the room for this specific assignment
+    // ── 1. WebSocket listener (fastest path) ──────────────────────────────────
+    const socket = io(process.env.NEXT_PUBLIC_API_URL as string, {
+      transports: ["websocket", "polling"], // Try WebSocket first, fall back to polling
+    });
+
     socket.emit("join-assignment", assignmentId);
 
-    // Listen for the completion event from the AI Worker
     socket.on("assignment-completed", (data: { success: boolean; generatedPaper: GeneratedPaper }) => {
+      if (isDone) return;
+      isDone = true;
+      clearInterval(pollInterval);
       if (data.success) {
         setPaper(data.generatedPaper);
         setStatus("completed");
@@ -43,8 +48,37 @@ export default function ResultPage() {
       }
     });
 
-    // Cleanup on unmount
+    // ── 2. Polling fallback (catches the race condition where socket fires  ────
+    //       before the browser has connected and joined the room)           ────
+    const pollInterval = setInterval(async () => {
+      if (isDone) return;
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/assignments/${assignmentId}/status`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === "completed") {
+          isDone = true;
+          clearInterval(pollInterval);
+          socket.disconnect();
+          setPaper(data.generatedPaper);
+          setStatus("completed");
+        } else if (data.status === "failed") {
+          isDone = true;
+          clearInterval(pollInterval);
+          socket.disconnect();
+          setStatus("failed");
+        }
+      } catch {
+        // Network blip — just wait for next poll
+      }
+    }, 3000); // Poll every 3 seconds
+
     return () => {
+      isDone = true;
+      clearInterval(pollInterval);
       socket.disconnect();
     };
   }, [assignmentId]);

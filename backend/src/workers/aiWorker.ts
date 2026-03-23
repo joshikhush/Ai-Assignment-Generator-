@@ -1,5 +1,5 @@
 import { Worker, Job, type ConnectionOptions } from 'bullmq';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import Assignment from '../models/Assignment';
 import { getIO } from '../lib/socket';
@@ -7,8 +7,6 @@ import { getIO } from '../lib/socket';
 dotenv.config();
 
 // 1. Same Redis Connection we used for the Queue
-// Pass raw options instead of an IORedis instance to avoid the
-// dual-ioredis version TypeScript conflict (your ioredis vs bullmq's bundled ioredis).
 const redisUrl = new URL(process.env.REDIS_URL as string);
 
 const connection: ConnectionOptions = {
@@ -16,12 +14,12 @@ const connection: ConnectionOptions = {
   port: Number(redisUrl.port) || 6379,
   password: redisUrl.password || undefined,
   username: redisUrl.username || undefined,
-  tls: redisUrl.protocol === 'rediss:' ? {} : undefined,
+  tls: redisUrl.protocol === 'rediss:' ? { rejectUnauthorized: false } : undefined,
   maxRetriesPerRequest: null,
 };
 
 // 2. Initialize Google Gemini AI Service
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
 // 3. The Actual Worker Process
 export const aiWorker = new Worker('assignment-generation', async (job: Job) => {
@@ -51,16 +49,14 @@ export const aiWorker = new Worker('assignment-generation', async (job: Job) => 
     `;
 
     // 5. Ask Gemini to generate it
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: promptMessage,
-      config: {
-        responseMimeType: 'application/json',
-      }
-    });
+    // Using gemini-1.5-flash which is much faster than the 2.5 thinking model
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent(promptMessage);
+    const response = await result.response;
 
     // 6. Parse the response into readable JSON
-    let generatedJson = JSON.parse(response.text || '{}');
+    const text = response.text();
+    let generatedJson = JSON.parse(text || '{}');
 
     // 7. Save the completed paper back into MongoDB!
     await Assignment.findByIdAndUpdate(assignmentId, {

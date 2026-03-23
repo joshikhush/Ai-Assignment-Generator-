@@ -12,7 +12,7 @@ const connection: ConnectionOptions = {
   port: Number(redisUrl.port) || 6379,
   password: redisUrl.password || undefined,
   username: redisUrl.username || undefined,
-  tls: redisUrl.protocol === 'rediss:' ? {} : undefined,
+  tls: redisUrl.protocol === 'rediss:' ? { rejectUnauthorized: false } : undefined,
   maxRetriesPerRequest: null,
 };
 
