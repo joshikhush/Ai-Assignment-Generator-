@@ -1,5 +1,4 @@
-import { Worker, Job } from 'bullmq';
-import IORedis from 'ioredis';
+import { Worker, Job, type ConnectionOptions } from 'bullmq';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import Assignment from '../models/Assignment';
@@ -8,9 +7,18 @@ import { getIO } from '../lib/socket';
 dotenv.config();
 
 // 1. Same Redis Connection we used for the Queue
-const connection = new IORedis(process.env.REDIS_URL as string, {
+// Pass raw options instead of an IORedis instance to avoid the
+// dual-ioredis version TypeScript conflict (your ioredis vs bullmq's bundled ioredis).
+const redisUrl = new URL(process.env.REDIS_URL as string);
+
+const connection: ConnectionOptions = {
+  host: redisUrl.hostname,
+  port: Number(redisUrl.port) || 6379,
+  password: redisUrl.password || undefined,
+  username: redisUrl.username || undefined,
+  tls: redisUrl.protocol === 'rediss:' ? {} : undefined,
   maxRetriesPerRequest: null,
-});
+};
 
 // 2. Initialize Google Gemini AI Service
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
@@ -86,7 +94,7 @@ export const aiWorker = new Worker('assignment-generation', async (job: Job) => 
     
     throw error;
   }
-}, { connection: connection as any });
+}, { connection });
 
 // Log when the worker starts listening
 aiWorker.on('ready', () => {

@@ -1,18 +1,23 @@
-import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
+import { Queue, type ConnectionOptions } from 'bullmq';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 1. Establish the connection to Upstash Redis
-// BullMQ requires maxRetriesPerRequest to be null
-const connection = new IORedis(process.env.REDIS_URL as string, {
-  maxRetriesPerRequest: null,
-});
+// Parse the Redis URL into host/port/password so BullMQ uses its own
+// bundled ioredis — avoids the dual-ioredis version TypeScript conflict.
+const redisUrl = new URL(process.env.REDIS_URL as string);
 
-// 2. Initialize the BullMQ Queue where our AI Jobs will sit
-export const assignmentQueue = new Queue('assignment-generation', { 
-  connection 
+const connection: ConnectionOptions = {
+  host: redisUrl.hostname,
+  port: Number(redisUrl.port) || 6379,
+  password: redisUrl.password || undefined,
+  username: redisUrl.username || undefined,
+  tls: redisUrl.protocol === 'rediss:' ? {} : undefined,
+  maxRetriesPerRequest: null,
+};
+
+export const assignmentQueue = new Queue('assignment-generation', {
+  connection,
 });
 
 console.log('✅ BullMQ Queue Initialized');
