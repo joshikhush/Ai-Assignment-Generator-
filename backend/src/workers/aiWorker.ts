@@ -55,7 +55,15 @@ export const aiWorker = new Worker('assignment-generation', async (job: Job) => 
     const response = await result.response;
 
     // 6. Parse the response into readable JSON
-    const text = response.text();
+    let text = response.text();
+
+    // Remove markdown formatting if Gemini included it
+    if (text.includes("```json")) {
+      text = text.split("```json")[1].split("```")[0].trim();
+    } else if (text.includes("```")) {
+      text = text.split("```")[1].split("```")[0].trim();
+    }
+
     let generatedJson = JSON.parse(text || '{}');
 
     // 7. Save the completed paper back into MongoDB!
