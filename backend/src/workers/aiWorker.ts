@@ -58,10 +58,9 @@ export const aiWorker = new Worker('assignment-generation', async (job: Job) => 
     let text = response.text();
 
     // Remove markdown formatting if Gemini included it
-    if (text.includes("```json")) {
-      text = text.split("```json")[1].split("```")[0].trim();
-    } else if (text.includes("```")) {
-      text = text.split("```")[1].split("```")[0].trim();
+    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      text = codeBlockMatch[1].trim();
     }
 
     let generatedJson = JSON.parse(text || '{}');
